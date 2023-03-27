@@ -1,0 +1,25 @@
+path_23andme = 'C:/Users/kimur/Downloads/SNP.txt'
+f = open(path_23andme, 'r')
+path_VEP = 'C:/Users/kimur/Downloads/VEP.txt'
+g = open(path_VEP, 'w')
+
+line = f.readline().splitlines()[0].split('\t')
+while line:
+    if line[0][0] == '#':
+        line = f.readline().split('\t')
+        continue
+    chr = line[1]
+    if chr == 'MT':
+        continue
+    pos = line[2]
+    ref = line[3][0]
+    if chr == 'Y':
+        alt == line[3][0]
+    else:
+        alt = line[3][1]
+    if ref == '-':
+        ref = 'A'
+        alt = 'A'
+    VEPline = chr + ' ' + pos + ' ' + pos + ' ' + ref + '/' + alt + ' + \n'
+    g.write(VEPline)
+    line = f.readline().split('\t')

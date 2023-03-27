@@ -1,0 +1,457 @@
+import random
+import itertools
+from Replication import *
+
+def Composition(Text, k):
+    composition = []
+    for i in range(len(Text) - k + 1):
+        kmer = Text[i:i+k]
+        composition.append(kmer)
+    composition.sort()
+    return composition
+
+def PathToGenome(path):
+    genome = path[0]
+    for i in range(len(path) - 1):
+        kmer_i = path[i]
+        kmer_ii = path[i+1]
+        if kmer_i[1:] == kmer_ii[:-1]:
+            genome += kmer_ii[-1]
+        else:
+            print('mismatch',kmer_i,'with',kmer_ii)
+    return genome
+
+def Overlap(Patterns):
+    from itertools import product
+    overlap = {}
+    for pair in product(Patterns, repeat = 2):
+        if pair[0][1:] == pair[1][:-1]:
+            if pair[0] in overlap:
+                overlap[pair[0]].add(pair[1])
+            else:
+                overlap[pair[0]] = set()
+                overlap[pair[0]].add(pair[1])
+    return overlap
+
+def DeBruijnk(Text, k):
+    db = {}
+    for i in range(len(Text) - k + 1):
+        edge = Text[i:i+k]
+        prefix = edge[:-1]
+        suffix = edge[1:]
+        if prefix not in db:
+            db[prefix] = []
+        db[prefix].append(suffix)
+    return db
+
+def DeBruijnkmers(Patterns):
+    db = {}
+    for kmer in Patterns:
+        prefix = kmer[:-1]
+        suffix = kmer[1:]
+        if prefix not in db:
+            db[prefix] = []
+        db[prefix].append(suffix)
+    return db
+
+def DeBruijnPairs(GappedPatterns):
+    db = {}
+    for pair in GappedPatterns:
+        first, second = pair.split('|')
+        prefix = '|'.join([first[:-1],second[:-1]])
+        suffix = '|'.join([first[1:],second[1:]])
+        if prefix not in db:
+            db[prefix] = []
+        db[prefix].append(suffix)
+    return db
+
+def EulerianCycle(Graph):
+    start = random.choice(list(Graph.keys()))
+    cycle = []
+    cycle = EulerianCycle_sub(Graph,start,cycle)
+    return cycle
+
+def EulerianCycle_sub(Graph,start,cycle):
+    pos = start
+    cycle.append(start)
+    while Graph != {}:
+        if not pos in Graph:
+            for c in cycle:
+                if c in Graph:
+                    newStart = c
+                    break
+            index = cycle.index(newStart)
+            cycle = cycle[:-1]
+            cycle = cycle[index:] + cycle[:index]
+            cycle = EulerianCycle_sub(Graph, newStart, cycle)
+            return cycle
+        pos_n = random.choice(Graph[pos])
+        cycle.append(pos_n)
+        if len(Graph[pos]) == 1:
+            del Graph[pos]
+        elif len(Graph[pos]) > 1:
+            Graph[pos].remove(pos_n)
+        pos = pos_n
+    else:
+        return cycle
+
+def Nodes(Graph):
+    nodes = set()
+    nodes.update(Graph.keys())
+    for values in Graph.values():
+        nodes.update(values)
+    return nodes
+
+def Degree(Graph):
+    nodes = Nodes(Graph)
+    degree = dict.fromkeys(nodes,[0, 0])
+    ## memo degree = {node:[indegree,outdegree]}
+    for v in Graph.keys():
+        for w in Graph[v]:
+            #degree[w][0] += 1
+            degree[w] = [degree[w][0] + 1, degree[w][1]]
+        degree[v] = [degree[v][0] , len(Graph[v])]
+    return degree
+
+def EulerianPath(Graph):
+    degree = Degree(Graph)
+    nodes = Nodes(Graph)
+    for node in nodes:
+        if degree[node][0] < degree[node][1]:
+            v = node
+        elif degree[node][0] > degree[node][1]:
+            w = node
+    if w in Graph:
+        Graph[w].append(v)
+    else:
+        Graph[w] = [v]
+    cycle = EulerianCycle(Graph)
+    for i in range(len(cycle)):
+        if cycle[i] == w:
+            if cycle[i+1] == v:
+                index = i+1
+                break
+    path = cycle[index:-1] + cycle[:index]
+    return path
+
+def StringReconstruction(Patterns): #for EulerianString, not for EulerianCycle
+    dB = DeBruijnkmers(Patterns)
+    try:
+        path = EulerianPath(dB)
+    except UnboundLocalError:
+        print('Graph might be EulerianCycle, not EulelianString')
+        path = EulerianCycle(dB)
+    Text = PathToGenome(path)
+    return Text
+
+def KUniversalString(k):
+    kmers = []
+    for nums in itertools.product([0,1], repeat = k):
+        kmer = [str(i) for i in nums]
+        kmers.append(''.join(kmer))
+    dB = DeBruijnkmers(kmers)
+    cycle = EulerianCycle(dB)
+    string = PathToGenome(cycle)
+    string = string[:-k+1]
+    return string
+
+def PairedComposition(Text, k, d):
+    composition = []
+    for i in range(len(Text) - 2*k - d + 1):
+        p1 = Text[i:i+k]
+        p2 = Text[i+k+d : i+2*k+d]
+        kdmer = '(' + p1 + '|' + p2 + ')'
+        composition.append(kdmer)
+    composition.sort()
+    print(' '.join(composition))
+
+def StringSpelledByGappedPatterns(GappedPatterns, k, d):
+    GappedPatterns = [s.split('|') for s in GappedPatterns]
+    FirstPatterns = [i[0] for i in GappedPatterns]
+    SecondPatterns = [i[1] for i in GappedPatterns]
+    PrefixString = ''.join([i[0] for i in FirstPatterns]) + FirstPatterns[-1][1:]
+    SuffixString = ''.join([i[0] for i in SecondPatterns]) + SecondPatterns[-1][1:]
+    String = PrefixString + SuffixString[-k-d:]
+    return String
+
+def StringReconstructionReadPairs(GappedPatterns, k, d):
+    dB = DeBruijnPairs(GappedPatterns)
+    try:
+        path = EulerianPath(dB)
+    except UnboundLocalError:
+        print('Graph might be EulerianCycle, not EulelianString')
+        path = EulerianCycle(dB)
+    string = StringSpelledByGappedPatterns(path, k, d)
+    return string
+
+def MaximalNonBranchingPaths(Graph):
+    Paths = []
+    degree = Degree(Graph)
+    for node in Graph.keys():
+        if degree[node] == [1, 1]:
+            continue
+        elif degree[node][1] == 0:
+            continue
+        else:
+            for w in Graph[node]:
+                NonBranchingPath = node + w[-1]
+                while degree[w] == [1, 1]:
+                    NonBranchingPath += Graph[w][0][-1]
+                    w = Graph[w][0]
+                else:
+                    Paths.append(NonBranchingPath)
+    return Paths
+
+def ContigGeneration(kmers):
+    dB = DeBruijnkmers(kmers)
+    paths = MaximalNonBranchingPaths(dB) 
+    return paths
+
+def Translation(RNA):
+    Peptide = ''
+    codontable = CodonTable()
+    for i in range(0, len(RNA), 3):
+        codon = RNA[i:i+3]
+        protein = codontable[codon]
+        Peptide += protein
+    return Peptide
+
+def CodonTable():
+    codontable = {}
+    codon_path = 'C:/Users/kimur/Documents/src/Biology_Meets_Programming/RNA_codon_table_1.txt'
+    with open(codon_path, 'r') as f:
+        lines = f.read().splitlines()
+        for line in lines:
+            codon, protein = line.split(' ')
+            codontable[codon] = protein
+    return codontable
+
+def ProteinTable():
+    codontable = CodonTable()
+    proteins = set(codontable.values())
+    proteintable = dict.fromkeys(proteins, [])
+    for codon, protein in codontable.items():
+        proteintable[protein] = proteintable[protein] + [codon]
+    return proteintable
+
+def PeptideEncoding(DNA, peptide):
+    patterns = []
+    n = len(peptide)
+    for i in range(len(DNA) - 3*n + 1):
+        pattern = DNA[i:i+3*n]
+        RNA = Transcription(pattern)
+        peptide_i = Translation(RNA)
+        RCRNA = Transcription(ReverseComplement(pattern))
+        peptide_irc = Translation(RCRNA)
+        if peptide == peptide_i or peptide == peptide_irc:
+            patterns.append(pattern)
+    return patterns
+
+def AminoAcidMass():
+    aminoacidmass = {}
+    path = 'C:/Users/kimur/Documents/src/Biology_Meets_Programming/integer_mass_table.txt'
+    with open(path, 'r') as f:
+        lines = f.read().splitlines()
+        for line in lines:
+            aminoacid, mass = line.split(' ')
+            aminoacidmass[aminoacid] = int(mass)
+    return aminoacidmass
+
+def PrefixMass(Peptide):
+    PrefixMass = [0]
+    #in case of Peptide written in Characters
+    if isinstance(Peptide[0], str):
+        aminoacidmass = AminoAcidMass()
+        for i in range(0, len(Peptide)):
+            PrefixMass.append(PrefixMass[i] + aminoacidmass[Peptide[i]])
+
+    #in case of Peptide written in mass integer
+    elif isinstance(Peptide[0], int): 
+        for i in range(0, len(Peptide)):
+            PrefixMass.append(PrefixMass[i] + Peptide[i])
+    return PrefixMass
+
+def LinearSpectrum(Peptide):
+    LinearSpectrum = [0]
+    prefixmass = PrefixMass(Peptide)
+    from itertools import combinations
+    for i, j in combinations(range(len(prefixmass)), 2):
+        LinearSpectrum.append(prefixmass[j] - prefixmass[i])
+    LinearSpectrum.sort()
+    return LinearSpectrum
+    
+def CyclicSpectrum(Peptide):
+    CyclicSpectrum = LinearSpectrum(Peptide)
+    prefixmass = PrefixMass(Peptide)
+    from itertools import combinations
+    M = max(prefixmass)
+    for i, j in combinations(range(1, len(prefixmass) - 1), 2):
+        CyclicSpectrum.append(M - (prefixmass[j] - prefixmass[i]))
+    CyclicSpectrum.sort()
+    return CyclicSpectrum
+        
+def Expand(CandidatePeptides, FC):
+    new_candidates = []
+    #masslist = set(AminoAcidMass().values())
+    #masslist = set(range(57,201))
+    masslist = set(sorted(FC))
+    for peptide in CandidatePeptides:
+        for mass in masslist:
+            new_candidates.append(peptide + [mass])
+    return new_candidates
+
+def Consistent(Spectrum_a, Spectrum_b):
+    for mass in set(Spectrum_a):
+        a = Spectrum_a.count(mass)
+        b = Spectrum_b.count(mass)
+        if a > b:
+            return False
+    return True
+
+def CyclopeptideSequencing(Spectrum):
+    FinalPeptides = []
+    CandidatePeptides = [[]]
+    M = max(Spectrum)
+    while len(CandidatePeptides) > 0:
+        CandidatePeptides = Expand(CandidatePeptides)
+        remove_list = []
+        for Peptide in CandidatePeptides:
+            if sum(Peptide) == M:
+                if CyclicSpectrum(Peptide) == Spectrum and not Peptide in FinalPeptides:
+                    FinalPeptides.append(Peptide)
+                remove_list.append(Peptide)
+            elif not Consistent(LinearSpectrum(Peptide), Spectrum):
+                remove_list.append(Peptide)
+        CandidatePeptides = [i for i in CandidatePeptides if i not in remove_list]
+    return FinalPeptides
+
+def CyclicScore(Peptide, Spectrum):
+    score = 0
+    S_peptide = CyclicSpectrum(Peptide)
+    for mass in set(S_peptide):
+        a = S_peptide.count(mass)
+        b = Spectrum.count(mass)
+        if a > b:
+            score += b
+        elif a <= b:
+            score += a
+    return score
+
+def LinearScore(Peptide, Spectrum):
+    score = 0
+    S_peptide = LinearSpectrum(Peptide)
+    for mass in set(S_peptide):
+        a = S_peptide.count(mass)
+        b = Spectrum.count(mass)
+        if a > b:
+            score += b
+        elif a <= b:
+            score += a
+    return score
+
+def to_intlist(chrlist):
+    return [int(i) for i in chrlist]
+
+def Trim(Leaderboard, Spectrum, N):
+    Sdict = {}
+    for peptide in Leaderboard:
+        score = LinearScore(peptide, Spectrum)
+        peptide = '-'.join([str(i) for i in peptide])
+        Sdict[peptide] = score
+    Sdict = {k: v for k, v in sorted(Sdict.items(), key = lambda a: a[1], reverse = True)}
+    if len(Leaderboard) > N:
+        borderScore = list(Sdict.values())[N-1]
+        Leaderboard = [peptide for peptide in Sdict.keys() if Sdict[peptide] >= borderScore]
+    else:
+        Leaderboard = [peptide for peptide in Sdict.keys()]
+    #Leaderboard = [[int(i)] for sublist in Leaderboard for i in sublist.split('-')]
+    Leaderboard = [i.split('-') for i in Leaderboard]
+    Leaderboard = [to_intlist(i) for i in Leaderboard]
+    return Leaderboard
+
+def LeaderboardCyclopeptideSequencing(Spectrum, N):
+    LeaderPeptide = [[0]]
+    Leaderboard = [[]]
+    M = max(Spectrum)
+    H = 0
+    round = 0
+    LeaderPeptides = []
+    while len(Leaderboard) > 0:
+        round += 1
+        print('round',round)
+        Leaderboard = Expand(Leaderboard)
+        remove_list = []
+        for Peptide in Leaderboard:
+            if sum(Peptide) == M:
+                C = CyclicScore(Peptide, Spectrum)
+                if C > H:
+                    H = C
+                    LeaderPeptides = [Peptide]
+                    print(C, Peptide)
+                    LeaderPeptide = Peptide
+                elif C == H:
+                    print(C, Peptide)
+                    if not Peptide in LeaderPeptides:
+                        LeaderPeptides.append(Peptide)
+                #remove_list.append(Peptide)
+            elif sum(Peptide) > M:
+                remove_list.append(Peptide)
+        Leaderboard = [i for i in Leaderboard if i not in remove_list]
+        Leaderboard = Trim(Leaderboard, Spectrum, N)
+        print(len(LeaderPeptides), LeaderPeptides)
+    return LeaderPeptides
+
+def Convolution(Spectrum):
+    Convolution = []
+    for a, b in itertools.combinations(set(Spectrum), 2):
+        C = abs(a - b)
+        if C > 0:
+            Convolution.append(C)
+    return Convolution
+
+def FrequentConvolution(Spectrum, M):
+    convolution = Convolution(Spectrum)
+    mass_list = set(range(57,201))
+    frequency = dict()
+    for mass in mass_list:
+        frequency[mass] = convolution.count(mass)
+    frequency = {k:v for k,v in sorted(frequency.items(), key = lambda a: a[1], reverse = True)} 
+    border_f = list(frequency.values())[M-1]
+    frequentconvolution = [k for k in frequency.keys() if frequency[k] >= border_f] 
+    return frequentconvolution
+
+def ConvolutionCyclopeptideSequencing(Spectrum, M, N):
+    LeaderPeptide = [[0]]
+    Leaderboard = [[]]
+    FC = FrequentConvolution(Spectrum, M)
+    M = max(Spectrum)
+    H = 0
+    round = 0
+    LeaderPeptides = []
+    while len(Leaderboard) > 0:
+        round += 1
+        print('round',round)
+        Leaderboard = Expand(Leaderboard, FC)
+        remove_list = []
+        for Peptide in Leaderboard:
+            if sum(Peptide) == M:
+                C = CyclicScore(Peptide, Spectrum)
+                if C > H:
+                    H = C
+                    LeaderPeptides = [Peptide]
+                    print(C, Peptide)
+                    LeaderPeptide = Peptide
+                elif C == H:
+                    print(C, Peptide)
+                    if not Peptide in LeaderPeptides:
+                        LeaderPeptides.append(Peptide)
+                #remove_list.append(Peptide)
+            elif sum(Peptide) > M:
+                remove_list.append(Peptide)
+        Leaderboard = [i for i in Leaderboard if i not in remove_list]
+        Leaderboard = Trim(Leaderboard, Spectrum, N)
+        print(len(LeaderPeptides), LeaderPeptides)
+        print('LeaderPeptide',LeaderPeptide)
+    return LeaderPeptides
+
+
